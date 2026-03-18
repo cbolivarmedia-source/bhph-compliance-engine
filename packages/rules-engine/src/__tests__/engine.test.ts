@@ -1,4 +1,4 @@
-import { getDealValueForParameter, filterApplicableRules } from '../engine.js';
+import { getDealValueForParameter, filterApplicableRules, evaluateRules } from '../engine.js';
 import { makeDeal, makeRule } from './fixtures.js';
 
 describe('getDealValueForParameter', () => {
@@ -92,5 +92,47 @@ describe('filterApplicableRules', () => {
     ];
     const deal = makeDeal({ loanAmount: 12000 });
     expect(filterApplicableRules(rules, deal)).toHaveLength(0);
+  });
+});
+
+describe('evaluateRules', () => {
+  it('returns empty array when deal complies with all rules', () => {
+    const rules = [makeRule({ thresholdValue: 36 })];
+    const deal = makeDeal({ apr: 24.99 });
+    expect(evaluateRules(rules, deal)).toHaveLength(0);
+  });
+
+  it('returns a violation with correct details when APR exceeds the cap', () => {
+    const statute = { id: 's1', title: 'IL Consumer Finance Act', section: '815 ILCS 205', url: null, excerpt: null };
+    const rule = makeRule({ id: 'rule-apr-il', thresholdValue: 36, statuteReferences: [statute] });
+    const deal = makeDeal({ apr: 40 });
+
+    const violations = evaluateRules([rule], deal);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]!.ruleId).toBe('rule-apr-il');
+    expect(violations[0]!.actualValue).toBe(40);
+    expect(violations[0]!.thresholdValue).toBe(36);
+    expect(violations[0]!.comparisonOp).toBe('lte');
+    expect(violations[0]!.statuteReferences).toHaveLength(1);
+  });
+
+  it('captures all violations when multiple rules are broken', () => {
+    const rules = [
+      makeRule({ id: 'r1', ruleParameter: 'max_apr', thresholdValue: 36 }),
+      makeRule({ id: 'r2', ruleParameter: 'max_loan_amount', thresholdValue: 10000 }),
+    ];
+    const deal = makeDeal({ apr: 40, loanAmount: 15000 });
+    const violations = evaluateRules(rules, deal);
+    expect(violations).toHaveLength(2);
+    expect(violations.map(v => v.ruleId)).toContain('r1');
+    expect(violations.map(v => v.ruleId)).toContain('r2');
+  });
+
+  it('includes warning-severity rules in results with correct severity tag', () => {
+    const rule = makeRule({ severity: 'warning', thresholdValue: 30 });
+    const deal = makeDeal({ apr: 32 });
+    const violations = evaluateRules([rule], deal);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]!.severity).toBe('warning');
   });
 });
