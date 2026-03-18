@@ -12,3 +12,7 @@ export function getDealValueForParameter(param: RuleParameter, input: DealInput)
     case 'max_total_interest':     return calculateTotalInterest(input);
   }
 }
+
+export function filterApplicableRules(rules: Rule[], input: DealInput): Rule[] {
+  return rules.filter(rule => evaluateCondition(rule, input));
+}
