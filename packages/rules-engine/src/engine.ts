@@ -60,3 +60,15 @@ export function evaluateRules(rules: Rule[], input: DealInput): Violation[] {
   }
   return violations;
 }
+
+export async function checkCompliance(
+  input: DealInput,
+  ruleLoader: RuleLoader,
+  domainSlug = 'consumer_credit'
+): Promise<ComplianceResult> {
+  const asOfDate = new Date();
+  const rules = await ruleLoader.loadRules(input.stateCode, domainSlug, asOfDate);
+  const applicableRules = filterApplicableRules(rules, input);
+  const violations = evaluateRules(applicableRules, input);
+  return buildComplianceResult(input, applicableRules, violations);
+}

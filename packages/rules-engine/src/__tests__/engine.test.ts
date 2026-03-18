@@ -1,5 +1,6 @@
-import { getDealValueForParameter, filterApplicableRules, evaluateRules, buildComplianceResult } from '../engine.js';
+import { getDealValueForParameter, filterApplicableRules, evaluateRules, buildComplianceResult, checkCompliance } from '../engine.js';
 import { makeDeal, makeRule } from './fixtures.js';
+import { createMockRuleLoader } from '../loader.js';
 
 describe('getDealValueForParameter', () => {
   it('returns apr for max_apr', () => {
@@ -199,5 +200,91 @@ describe('buildComplianceResult', () => {
     const rules = [makeRule({ id: 'r1' }), makeRule({ id: 'r2' })];
     const result = buildComplianceResult(makeDeal(), rules, []);
     expect(result.applicableRules).toHaveLength(2);
+  });
+});
+
+describe('checkCompliance — full pipeline with mock loader', () => {
+  const IL_APR_CAP = makeRule({
+    id: 'il-apr-cap',
+    stateCode: 'IL',
+    domainSlug: 'consumer_credit',
+    ruleParameter: 'max_apr',
+    comparisonOp: 'lte',
+    thresholdValue: 36,
+    validFrom: '2020-01-01',
+    validUntil: null,
+  });
+
+  it('IL deal at 32% APR passes when cap is 36%', async () => {
+    const loader = createMockRuleLoader([IL_APR_CAP]);
+    const deal = makeDeal({ stateCode: 'IL', apr: 32 });
+    const result = await checkCompliance(deal, loader);
+    expect(result.result).toBe('pass');
+    expect(result.violations).toHaveLength(0);
+  });
+
+  it('IL deal at 40% APR fails when cap is 36%', async () => {
+    const loader = createMockRuleLoader([IL_APR_CAP]);
+    const deal = makeDeal({ stateCode: 'IL', apr: 40 });
+    const result = await checkCompliance(deal, loader);
+    expect(result.result).toBe('fail');
+    expect(result.violations).toHaveLength(1);
+    expect(result.violations[0]!.ruleId).toBe('il-apr-cap');
+    expect(result.violations[0]!.actualValue).toBe(40);
+    expect(result.violations[0]!.thresholdValue).toBe(36);
+  });
+
+  it('evaluates TX tiered APR rules based on loan amount condition', async () => {
+    // TX: APR cap of 30% for loans <= $10,000; cap of 24% for loans > $10,000
+    const txLowLoanRule = makeRule({
+      id: 'tx-low-loan-apr',
+      stateCode: 'TX',
+      domainSlug: 'consumer_credit',
+      ruleParameter: 'max_apr',
+      comparisonOp: 'lte',
+      thresholdValue: 30,
+      conditionField: 'loan_amount',
+      conditionOp: 'lte',
+      conditionValue: 10000,
+      conditionMin: null,
+      conditionMax: null,
+      validFrom: '2020-01-01',
+      validUntil: null,
+    });
+    const txHighLoanRule = makeRule({
+      id: 'tx-high-loan-apr',
+      stateCode: 'TX',
+      domainSlug: 'consumer_credit',
+      ruleParameter: 'max_apr',
+      comparisonOp: 'lte',
+      thresholdValue: 24,
+      conditionField: 'loan_amount',
+      conditionOp: 'gt',
+      conditionValue: 10000,
+      conditionMin: null,
+      conditionMax: null,
+      validFrom: '2020-01-01',
+      validUntil: null,
+    });
+
+    const loader = createMockRuleLoader([txLowLoanRule, txHighLoanRule]);
+
+    // $8,000 loan at 28% — only the <=10000 rule applies, 28 <= 30 → pass
+    const smallDeal = makeDeal({ stateCode: 'TX', loanAmount: 8000, apr: 28 });
+    const smallResult = await checkCompliance(smallDeal, loader);
+    expect(smallResult.result).toBe('pass');
+
+    // $15,000 loan at 28% — only the >10000 rule applies, 28 > 24 → fail
+    const largeDeal = makeDeal({ stateCode: 'TX', loanAmount: 15000, apr: 28 });
+    const largeResult = await checkCompliance(largeDeal, loader);
+    expect(largeResult.result).toBe('fail');
+  });
+
+  it('passes with no violations when there are no rules for the state', async () => {
+    const loader = createMockRuleLoader([IL_APR_CAP]); // only IL rules
+    const deal = makeDeal({ stateCode: 'CA', apr: 99 }); // no CA rules
+    const result = await checkCompliance(deal, loader);
+    expect(result.result).toBe('pass');
+    expect(result.applicableRules).toHaveLength(0);
   });
 });
