@@ -1,4 +1,4 @@
-import { getDealValueForParameter, filterApplicableRules, evaluateRules } from '../engine.js';
+import { getDealValueForParameter, filterApplicableRules, evaluateRules, buildComplianceResult } from '../engine.js';
 import { makeDeal, makeRule } from './fixtures.js';
 
 describe('getDealValueForParameter', () => {
@@ -134,5 +134,70 @@ describe('evaluateRules', () => {
     const violations = evaluateRules([rule], deal);
     expect(violations).toHaveLength(1);
     expect(violations[0]!.severity).toBe('warning');
+  });
+});
+
+describe('buildComplianceResult', () => {
+  it('returns pass with empty violations and warnings when deal is compliant', () => {
+    const deal = makeDeal();
+    const result = buildComplianceResult(deal, [], []);
+    expect(result.result).toBe('pass');
+    expect(result.violations).toHaveLength(0);
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it('returns fail when any violation-severity issue exists', () => {
+    const deal = makeDeal();
+    const violation = {
+      ruleId: 'r1', ruleParameter: 'max_apr' as const, displayDescription: 'APR too high',
+      severity: 'violation' as const, actualValue: 40, thresholdValue: 36,
+      comparisonOp: 'lte' as const, statuteReferences: [],
+    };
+    const result = buildComplianceResult(deal, [], [violation]);
+    expect(result.result).toBe('fail');
+    expect(result.violations).toHaveLength(1);
+  });
+
+  it('returns pass when only warnings exist (no hard violations)', () => {
+    const deal = makeDeal();
+    const warning = {
+      ruleId: 'r1', ruleParameter: 'max_apr' as const, displayDescription: 'APR approaching limit',
+      severity: 'warning' as const, actualValue: 33, thresholdValue: 30,
+      comparisonOp: 'lte' as const, statuteReferences: [],
+    };
+    const result = buildComplianceResult(deal, [], [warning]);
+    expect(result.result).toBe('pass');
+    expect(result.warnings).toHaveLength(1);
+    expect(result.violations).toHaveLength(0);
+  });
+
+  it('separates violations and warnings correctly when both are present', () => {
+    const deal = makeDeal();
+    const violation = {
+      ruleId: 'r1', ruleParameter: 'max_apr' as const, displayDescription: 'APR too high',
+      severity: 'violation' as const, actualValue: 40, thresholdValue: 36,
+      comparisonOp: 'lte' as const, statuteReferences: [],
+    };
+    const warning = {
+      ruleId: 'r2', ruleParameter: 'max_loan_amount' as const, displayDescription: 'Loan amount high',
+      severity: 'warning' as const, actualValue: 15000, thresholdValue: 12000,
+      comparisonOp: 'lte' as const, statuteReferences: [],
+    };
+    const result = buildComplianceResult(deal, [], [violation, warning]);
+    expect(result.result).toBe('fail');
+    expect(result.violations).toHaveLength(1);
+    expect(result.warnings).toHaveLength(1);
+  });
+
+  it('includes a valid ISO timestamp in checkedAt', () => {
+    const result = buildComplianceResult(makeDeal(), [], []);
+    expect(() => new Date(result.checkedAt)).not.toThrow();
+    expect(new Date(result.checkedAt).toISOString()).toBe(result.checkedAt);
+  });
+
+  it('includes applicable rules in result', () => {
+    const rules = [makeRule({ id: 'r1' }), makeRule({ id: 'r2' })];
+    const result = buildComplianceResult(makeDeal(), rules, []);
+    expect(result.applicableRules).toHaveLength(2);
   });
 });

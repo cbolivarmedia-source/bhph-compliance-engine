@@ -17,6 +17,22 @@ export function filterApplicableRules(rules: Rule[], input: DealInput): Rule[] {
   return rules.filter(rule => evaluateCondition(rule, input));
 }
 
+export function buildComplianceResult(
+  input: DealInput,
+  applicableRules: Rule[],
+  violations: Violation[]
+): ComplianceResult {
+  const hasViolations = violations.some(v => v.severity === 'violation');
+  return {
+    dealInput: input,
+    result: hasViolations ? 'fail' : 'pass',
+    violations: violations.filter(v => v.severity === 'violation'),
+    warnings: violations.filter(v => v.severity === 'warning'),
+    applicableRules,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
 export function evaluateRules(rules: Rule[], input: DealInput): Violation[] {
   const violations: Violation[] = [];
   for (const rule of rules) {
