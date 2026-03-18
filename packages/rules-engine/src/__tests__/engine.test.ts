@@ -288,3 +288,86 @@ describe('checkCompliance — full pipeline with mock loader', () => {
     expect(result.applicableRules).toHaveLength(0);
   });
 });
+
+describe('checkCompliance — edge cases', () => {
+  it('deal at exactly the threshold (30.0000% with 30% lte cap) passes', async () => {
+    const rule = makeRule({
+      id: 'cap-30',
+      stateCode: 'IL',
+      domainSlug: 'consumer_credit',
+      ruleParameter: 'max_apr',
+      comparisonOp: 'lte',
+      thresholdValue: 30,
+      validFrom: '2020-01-01',
+      validUntil: null,
+    });
+    const loader = createMockRuleLoader([rule]);
+    const deal = makeDeal({ stateCode: 'IL', apr: 30 });
+    const result = await checkCompliance(deal, loader);
+    expect(result.result).toBe('pass');
+  });
+
+  it('deal at 30.0001% with 30% lte cap fails', async () => {
+    const rule = makeRule({
+      id: 'cap-30',
+      stateCode: 'IL',
+      domainSlug: 'consumer_credit',
+      ruleParameter: 'max_apr',
+      comparisonOp: 'lte',
+      thresholdValue: 30,
+      validFrom: '2020-01-01',
+      validUntil: null,
+    });
+    const loader = createMockRuleLoader([rule]);
+    const deal = makeDeal({ stateCode: 'IL', apr: 30.0001 });
+    const result = await checkCompliance(deal, loader);
+    expect(result.result).toBe('fail');
+  });
+
+  it('excludes rules with validUntil in the past', async () => {
+    const expiredRule = makeRule({
+      id: 'expired',
+      stateCode: 'IL',
+      domainSlug: 'consumer_credit',
+      ruleParameter: 'max_apr',
+      comparisonOp: 'lte',
+      thresholdValue: 10, // extremely restrictive
+      validFrom: '2010-01-01',
+      validUntil: '2015-01-01', // expired
+    });
+    const loader = createMockRuleLoader([expiredRule]);
+    const deal = makeDeal({ stateCode: 'IL', apr: 40 }); // would fail if rule applied
+    const result = await checkCompliance(deal, loader);
+    expect(result.result).toBe('pass'); // expired rule ignored
+  });
+
+  it('captures all violations when multiple rules are broken', async () => {
+    const aprRule = makeRule({ id: 'apr', ruleParameter: 'max_apr', thresholdValue: 36, validFrom: '2020-01-01', validUntil: null });
+    const loanRule = makeRule({ id: 'loan', ruleParameter: 'max_loan_amount', thresholdValue: 10000, validFrom: '2020-01-01', validUntil: null });
+    const loader = createMockRuleLoader([aprRule, loanRule]);
+    const deal = makeDeal({ apr: 40, loanAmount: 15000 });
+    const result = await checkCompliance(deal, loader);
+    expect(result.violations).toHaveLength(2);
+  });
+
+  it('rule with condition that does not match is excluded and causes no violation', async () => {
+    const conditionalRule = makeRule({
+      id: 'conditional',
+      ruleParameter: 'max_apr',
+      comparisonOp: 'lte',
+      thresholdValue: 10, // would violate if applied
+      conditionField: 'loan_amount',
+      conditionOp: 'gt',
+      conditionValue: 50000, // condition: only applies for loans > $50k
+      conditionMin: null,
+      conditionMax: null,
+      validFrom: '2020-01-01',
+      validUntil: null,
+    });
+    const loader = createMockRuleLoader([conditionalRule]);
+    const deal = makeDeal({ apr: 40, loanAmount: 12000 }); // loan is not > $50k
+    const result = await checkCompliance(deal, loader);
+    expect(result.result).toBe('pass'); // condition not met → rule not applicable
+    expect(result.applicableRules).toHaveLength(0);
+  });
+});
