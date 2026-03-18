@@ -1,5 +1,5 @@
 import { calculateMonthlyPayment } from '../math.js';
-import { suggestReduceApr } from '../restructuring.js';
+import { suggestReduceApr, suggestExtendTerm } from '../restructuring.js';
 import type { Violation } from '../types.js';
 import { makeDeal } from './fixtures.js';
 
@@ -99,5 +99,67 @@ describe('suggestReduceApr', () => {
     const suggestion = suggestReduceApr(deal, [makeAprViolation(36, 40)])!;
     expect(suggestion.suggestedLoanAmount).toBe(10000);
     expect(suggestion.suggestedTermMonths).toBe(60);
+  });
+});
+
+describe('suggestExtendTerm', () => {
+  it('deal at 40% APR with 36% cap and 48-month term suggests shortest viable extension', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 48, loanAmount: 12000 });
+    const violations = [makeAprViolation(36, 40)];
+
+    const suggestion = suggestExtendTerm(deal, violations);
+
+    expect(suggestion).not.toBeNull();
+    expect(suggestion!.strategy).toBe('extend_term');
+    expect(suggestion!.suggestedApr).toBe(36);
+    expect(suggestion!.suggestedTermMonths).toBeGreaterThan(48);
+    expect(suggestion!.suggestedTermMonths).toBeLessThanOrEqual(72);
+    expect(suggestion!.suggestedTermMonths).toBe(54);
+  });
+
+  it('suggested monthly payment is lower than the original', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 48, loanAmount: 12000 });
+    const suggestion = suggestExtendTerm(deal, [makeAprViolation(36, 40)])!;
+    expect(suggestion.suggestedMonthlyPayment).toBeLessThan(suggestion.originalMonthlyPayment);
+  });
+
+  it('original monthly payment is calculated at the original APR and term', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 48, loanAmount: 12000 });
+    const suggestion = suggestExtendTerm(deal, [makeAprViolation(36, 40)])!;
+    expect(suggestion.originalMonthlyPayment).toBe(calculateMonthlyPayment(12000, 40, 48));
+  });
+
+  it('suggested monthly payment matches calculateMonthlyPayment at suggested params', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 48, loanAmount: 12000 });
+    const suggestion = suggestExtendTerm(deal, [makeAprViolation(36, 40)])!;
+    expect(suggestion.suggestedMonthlyPayment).toBe(
+      calculateMonthlyPayment(12000, 36, suggestion.suggestedTermMonths!)
+    );
+  });
+
+  it('returns null when deal is already at max term (72 months)', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 72 });
+    expect(suggestExtendTerm(deal, [makeAprViolation(36, 40)])).toBeNull();
+  });
+
+  it('returns null when already at a custom max term', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 60 });
+    expect(suggestExtendTerm(deal, [makeAprViolation(36, 40)], 60)).toBeNull();
+  });
+
+  it('returns null when there are no APR violations', () => {
+    const deal = makeDeal({ apr: 25, termMonths: 48 });
+    expect(suggestExtendTerm(deal, [makeLoanViolation(10000, 12000)])).toBeNull();
+  });
+
+  it('explanation field is null', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 48 });
+    expect(suggestExtendTerm(deal, [makeAprViolation(36, 40)])!.explanation).toBeNull();
+  });
+
+  it('preserves original loan amount in suggestion', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 48, loanAmount: 8000 });
+    const suggestion = suggestExtendTerm(deal, [makeAprViolation(36, 40)])!;
+    expect(suggestion.suggestedLoanAmount).toBe(8000);
   });
 });
