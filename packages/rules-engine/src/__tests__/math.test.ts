@@ -1,4 +1,4 @@
-import { calculateMonthlyPayment } from '../math.js';
+import { calculateMonthlyPayment, calculateTotalInterest } from '../math.js';
 
 describe('calculateMonthlyPayment', () => {
   it('computes $10,000 at 10% for 48 months to ~$253.63', () => {
@@ -30,5 +30,25 @@ describe('calculateMonthlyPayment', () => {
     const payment = calculateMonthlyPayment(10000, 10, 48);
     const decimals = payment.toString().split('.')[1]?.length ?? 0;
     expect(decimals).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('calculateTotalInterest', () => {
+  it('returns 0 for 0% APR', () => {
+    const input = { stateCode: 'IL', salePrice: 15000, downPayment: 5000, loanAmount: 10000, apr: 0, termMonths: 48, vehicleYear: 2020 };
+    expect(calculateTotalInterest(input)).toBe(0);
+  });
+
+  it('computes correct total interest for $10,000 at 10% for 48 months', () => {
+    const input = { stateCode: 'IL', salePrice: 15000, downPayment: 5000, loanAmount: 10000, apr: 10, termMonths: 48, vehicleYear: 2020 };
+    // monthly ≈ 253.63, total interest ≈ 253.63 * 48 - 10000 = 2174.24
+    expect(calculateTotalInterest(input)).toBeCloseTo(2174, 0);
+  });
+
+  it('satisfies total_interest = (monthly * term) - loanAmount', () => {
+    const input = { stateCode: 'IL', salePrice: 20000, downPayment: 5000, loanAmount: 15000, apr: 18, termMonths: 36, vehicleYear: 2019 };
+    const monthly = calculateMonthlyPayment(input.loanAmount, input.apr, input.termMonths);
+    const expected = Math.round((monthly * input.termMonths - input.loanAmount) * 100) / 100;
+    expect(calculateTotalInterest(input)).toBe(expected);
   });
 });

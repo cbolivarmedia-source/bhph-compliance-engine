@@ -12,3 +12,10 @@ export function calculateMonthlyPayment(
   const payment = (loanAmount * r) / (1 - Math.pow(1 + r, -termMonths));
   return Math.round(payment * 100) / 100;
 }
+
+export function calculateTotalInterest(input: DealInput): number {
+  if (input.apr === 0) return 0;
+  const monthly = calculateMonthlyPayment(input.loanAmount, input.apr, input.termMonths);
+  const total = monthly * input.termMonths - input.loanAmount;
+  return Math.round(total * 100) / 100;
+}
