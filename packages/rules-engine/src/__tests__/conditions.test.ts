@@ -94,3 +94,68 @@ describe('evaluateCondition', () => {
     expect(evaluateCondition(rule, makeDeal({ termMonths: 72 }))).toBe(false);
   });
 });
+
+describe('evaluateCondition — edge cases', () => {
+  it('between condition passes at exact lower boundary', () => {
+    const rule = makeRule({
+      conditionField: 'sale_price',
+      conditionOp: 'between',
+      conditionValue: null,
+      conditionMin: 10000,
+      conditionMax: 30000,
+    });
+    expect(evaluateCondition(rule, makeDeal({ salePrice: 10000 }))).toBe(true);
+  });
+
+  it('between condition passes at exact upper boundary', () => {
+    const rule = makeRule({
+      conditionField: 'sale_price',
+      conditionOp: 'between',
+      conditionValue: null,
+      conditionMin: 10000,
+      conditionMax: 30000,
+    });
+    expect(evaluateCondition(rule, makeDeal({ salePrice: 30000 }))).toBe(true);
+  });
+
+  it('between condition fails just outside the lower boundary', () => {
+    const rule = makeRule({
+      conditionField: 'sale_price',
+      conditionOp: 'between',
+      conditionValue: null,
+      conditionMin: 10000,
+      conditionMax: 30000,
+    });
+    expect(evaluateCondition(rule, makeDeal({ salePrice: 9999 }))).toBe(false);
+  });
+
+  it('condition with zero conditionValue evaluates correctly', () => {
+    const rule = makeRule({
+      conditionField: 'loan_amount',
+      conditionOp: 'gte',
+      conditionValue: 0,
+      conditionMin: null,
+      conditionMax: null,
+    });
+    expect(evaluateCondition(rule, makeDeal({ loanAmount: 0 }))).toBe(true);
+  });
+
+  it('very old vehicle (built in 1990) is correctly aged', () => {
+    const currentYear = new Date().getFullYear();
+    const rule = makeRule({
+      conditionField: 'vehicle_age_years',
+      conditionOp: 'gte',
+      conditionValue: 30,
+      conditionMin: null,
+      conditionMax: null,
+    });
+    const deal = makeDeal({ vehicleYear: 1990 });
+    expect(evaluateCondition(rule, deal)).toBe(currentYear - 1990 >= 30);
+  });
+
+  it('current year vehicle has age of 0', () => {
+    const currentYear = new Date().getFullYear();
+    const deal = makeDeal({ vehicleYear: currentYear });
+    expect(getConditionValue('vehicle_age_years', deal)).toBe(0);
+  });
+});
