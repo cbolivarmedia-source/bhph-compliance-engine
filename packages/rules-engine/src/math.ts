@@ -19,3 +19,9 @@ export function calculateTotalInterest(input: DealInput): number {
   const total = monthly * input.termMonths - input.loanAmount;
   return Math.round(total * 100) / 100;
 }
+
+export function findMaxAllowedApr(violations: Violation[]): number | null {
+  const aprViolations = violations.filter(v => v.ruleParameter === 'max_apr');
+  if (aprViolations.length === 0) return null;
+  return Math.min(...aprViolations.map(v => v.thresholdValue));
+}

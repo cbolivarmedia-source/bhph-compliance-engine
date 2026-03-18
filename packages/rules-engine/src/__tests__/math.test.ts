@@ -1,4 +1,4 @@
-import { calculateMonthlyPayment, calculateTotalInterest } from '../math.js';
+import { calculateMonthlyPayment, calculateTotalInterest, findMaxAllowedApr } from '../math.js';
 
 describe('calculateMonthlyPayment', () => {
   it('computes $10,000 at 10% for 48 months to ~$253.63', () => {
@@ -50,5 +50,41 @@ describe('calculateTotalInterest', () => {
     const monthly = calculateMonthlyPayment(input.loanAmount, input.apr, input.termMonths);
     const expected = Math.round((monthly * input.termMonths - input.loanAmount) * 100) / 100;
     expect(calculateTotalInterest(input)).toBe(expected);
+  });
+});
+
+describe('findMaxAllowedApr', () => {
+  const makeViolation = (ruleParameter: string, thresholdValue: number) => ({
+    ruleId: 'r1',
+    ruleParameter: ruleParameter as any,
+    displayDescription: 'test',
+    severity: 'violation' as const,
+    actualValue: 40,
+    thresholdValue,
+    comparisonOp: 'lte' as const,
+    statuteReferences: [],
+  });
+
+  it('returns threshold from a single APR violation', () => {
+    const violations = [makeViolation('max_apr', 30)];
+    expect(findMaxAllowedApr(violations)).toBe(30);
+  });
+
+  it('returns the most restrictive (lowest) threshold when multiple APR violations exist', () => {
+    const violations = [
+      makeViolation('max_apr', 30),
+      makeViolation('max_apr', 25),
+      makeViolation('max_apr', 28),
+    ];
+    expect(findMaxAllowedApr(violations)).toBe(25);
+  });
+
+  it('returns null when there are only non-APR violations', () => {
+    const violations = [makeViolation('max_loan_amount', 10000)];
+    expect(findMaxAllowedApr(violations)).toBeNull();
+  });
+
+  it('returns null for an empty violations array', () => {
+    expect(findMaxAllowedApr([])).toBeNull();
   });
 });
