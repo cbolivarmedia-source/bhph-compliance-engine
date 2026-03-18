@@ -4,3 +4,4 @@ export * from './comparisons.js';
 export * from './conditions.js';
 export * from './engine.js';
 export * from './loader.js';
+export * from './restructuring.js';
