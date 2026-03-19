@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
   // Run compliance check
   const loader = new SupabaseRuleLoader();
-  const result = await checkCompliance(dealInput, loader);
+  const result = await checkCompliance(dealInput, loader, 'usury');
 
   // Generate suggestions if non-compliant
   const suggestions = result.result === 'fail'
