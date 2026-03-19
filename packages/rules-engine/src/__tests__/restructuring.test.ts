@@ -1,5 +1,5 @@
 import { calculateMonthlyPayment } from '../math.js';
-import { suggestReduceApr, suggestExtendTerm } from '../restructuring.js';
+import { suggestReduceApr, suggestExtendTerm, suggestIncreaseDownPayment } from '../restructuring.js';
 import type { Violation } from '../types.js';
 import { makeDeal } from './fixtures.js';
 
@@ -161,5 +161,62 @@ describe('suggestExtendTerm', () => {
     const deal = makeDeal({ apr: 40, termMonths: 48, loanAmount: 8000 });
     const suggestion = suggestExtendTerm(deal, [makeAprViolation(36, 40)])!;
     expect(suggestion.suggestedLoanAmount).toBe(8000);
+  });
+});
+
+describe('suggestIncreaseDownPayment', () => {
+  it('deal at 40% with 36% cap, $2K down on $15K → suggests higher down payment', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 36, salePrice: 15000, downPayment: 2000, loanAmount: 13000 });
+    const violations = [makeAprViolation(36, 40)];
+
+    const suggestion = suggestIncreaseDownPayment(deal, violations);
+
+    expect(suggestion).not.toBeNull();
+    expect(suggestion!.strategy).toBe('increase_down_payment');
+    expect(suggestion!.suggestedApr).toBe(36);
+    expect(suggestion!.suggestedDownPayment).toBeGreaterThan(2000);
+    expect(suggestion!.suggestedLoanAmount).toBe(15000 - suggestion!.suggestedDownPayment!);
+  });
+
+  it('suggestedLoanAmount = salePrice - suggestedDownPayment', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 36, salePrice: 15000, downPayment: 2000, loanAmount: 13000 });
+    const suggestion = suggestIncreaseDownPayment(deal, [makeAprViolation(36, 40)])!;
+    expect(suggestion.suggestedLoanAmount).toBe(
+      Math.round((15000 - suggestion.suggestedDownPayment!) * 100) / 100
+    );
+  });
+
+  it('monthly payment comparison is accurate', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 36, salePrice: 15000, downPayment: 2000, loanAmount: 13000 });
+    const suggestion = suggestIncreaseDownPayment(deal, [makeAprViolation(36, 40)])!;
+    expect(suggestion.suggestedMonthlyPayment).toBe(
+      calculateMonthlyPayment(suggestion.suggestedLoanAmount!, 36, 36)
+    );
+  });
+
+  it('explanation field is null', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 36, salePrice: 15000, downPayment: 2000, loanAmount: 13000 });
+    expect(suggestIncreaseDownPayment(deal, [makeAprViolation(36, 40)])!.explanation).toBeNull();
+  });
+
+  it('returns null when there are no APR violations', () => {
+    const deal = makeDeal({ apr: 25, salePrice: 15000, downPayment: 2000, loanAmount: 13000 });
+    expect(suggestIncreaseDownPayment(deal, [makeLoanViolation(10000, 13000)])).toBeNull();
+  });
+
+  it('returns null when required down payment exceeds 50% of sale price', () => {
+    // Very high original APR (99%) with a very low cap (1%) on a 24-month term.
+    // referenceMonthly at 1% on $9000, 24mo is ~$376 (tiny vs. original at 99%).
+    // At 99% APR, loan amount for $376/mo over 24mo ≈ $3880 → down = $10000-$3880 = $6120 > 50% ($5000).
+    const deal = makeDeal({ apr: 99, termMonths: 24, salePrice: 10000, downPayment: 1000, loanAmount: 9000 });
+    const violations = [makeAprViolation(1, 99)];
+    expect(suggestIncreaseDownPayment(deal, violations, 50)).toBeNull();
+  });
+
+  it('suggestedDownPayment is always non-negative when a suggestion is returned', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 36, salePrice: 15000, downPayment: 2000, loanAmount: 13000 });
+    const result = suggestIncreaseDownPayment(deal, [makeAprViolation(36, 40)])!;
+    expect(result.suggestedDownPayment).toBeGreaterThanOrEqual(0);
+    expect(result.suggestedLoanAmount).toBeGreaterThan(0);
   });
 });
