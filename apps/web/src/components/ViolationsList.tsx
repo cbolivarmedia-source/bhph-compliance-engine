@@ -103,7 +103,7 @@ function ViolationItem({ v }: { v: Violation }) {
 }
 
 export function ViolationsList({ violations, warnings }: ViolationsListProps) {
-  if (violations.length === 0 && warnings.length === 0) return null;
+  if ((!violations || violations.length === 0) && (!warnings || warnings.length === 0)) return null;
 
   return (
     <div className="space-y-4">

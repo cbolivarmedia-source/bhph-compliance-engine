@@ -117,7 +117,7 @@ export default function Home() {
                   />
                 )}
 
-                <ApplicableRules rules={deal.applicableRules} />
+                <ApplicableRules rules={deal.applicableRules ?? []} />
               </>
             )}
           </div>

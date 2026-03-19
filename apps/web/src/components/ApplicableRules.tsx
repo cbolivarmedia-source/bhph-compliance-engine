@@ -24,7 +24,7 @@ interface ApplicableRulesProps {
 export function ApplicableRules({ rules }: ApplicableRulesProps) {
   const [open, setOpen] = useState(false);
 
-  if (rules.length === 0) return null;
+  if (!rules || rules.length === 0) return null;
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
