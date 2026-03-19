@@ -46,6 +46,18 @@ export function suggestIncreaseDownPayment(
   };
 }
 
+export function generateRestructuringSuggestions(
+  input: DealInput,
+  violations: Violation[]
+): RestructuringSuggestion[] {
+  const candidates = [
+    suggestReduceApr(input, violations),
+    suggestExtendTerm(input, violations),
+    suggestIncreaseDownPayment(input, violations),
+  ];
+  return candidates.filter((s): s is RestructuringSuggestion => s !== null);
+}
+
 export function suggestExtendTerm(
   input: DealInput,
   violations: Violation[],

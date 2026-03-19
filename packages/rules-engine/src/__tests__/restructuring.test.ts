@@ -1,5 +1,10 @@
 import { calculateMonthlyPayment } from '../math.js';
-import { suggestReduceApr, suggestExtendTerm, suggestIncreaseDownPayment } from '../restructuring.js';
+import {
+  suggestReduceApr,
+  suggestExtendTerm,
+  suggestIncreaseDownPayment,
+  generateRestructuringSuggestions,
+} from '../restructuring.js';
 import type { Violation } from '../types.js';
 import { makeDeal } from './fixtures.js';
 
@@ -218,5 +223,66 @@ describe('suggestIncreaseDownPayment', () => {
     const result = suggestIncreaseDownPayment(deal, [makeAprViolation(36, 40)])!;
     expect(result.suggestedDownPayment).toBeGreaterThanOrEqual(0);
     expect(result.suggestedLoanAmount).toBeGreaterThan(0);
+  });
+});
+
+describe('generateRestructuringSuggestions', () => {
+  it('non-compliant deal returns up to 3 suggestions in priority order', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 48, salePrice: 15000, downPayment: 3000, loanAmount: 12000 });
+    const violations = [makeAprViolation(36, 40)];
+
+    const suggestions = generateRestructuringSuggestions(deal, violations);
+
+    expect(suggestions.length).toBeGreaterThan(0);
+    expect(suggestions.length).toBeLessThanOrEqual(3);
+    expect(suggestions[0].strategy).toBe('reduce_apr');
+  });
+
+  it('compliant deal (no violations) returns empty array', () => {
+    const deal = makeDeal({ apr: 24 });
+    expect(generateRestructuringSuggestions(deal, [])).toEqual([]);
+  });
+
+  it('deal where only reduce_apr works returns 1 suggestion', () => {
+    // At max term (72 months), extend_term is null.
+    // With large down payment already, increase_down_payment may return null too via 50% cap.
+    // Use a deal already at 72 months so extend_term returns null.
+    // Make down payment large so increase_down_payment would exceed 50% cap.
+    const deal = makeDeal({
+      apr: 40,
+      termMonths: 72,
+      salePrice: 15000,
+      downPayment: 14000,
+      loanAmount: 1000,
+    });
+    // referenceMonthly at 36% on $1000, 72mo is tiny → suggestedLoanAmount at 40% also tiny
+    // suggestedDownPayment = 15000 - tiny ≈ 15000 > 50% of 15000 = 7500 → increase_down_payment null
+    const violations = [makeAprViolation(36, 40)];
+    const suggestions = generateRestructuringSuggestions(deal, violations);
+
+    expect(suggestions).toHaveLength(1);
+    expect(suggestions[0].strategy).toBe('reduce_apr');
+  });
+
+  it('deal with only non-APR violations returns empty array', () => {
+    const deal = makeDeal({ apr: 25 });
+    const violations = [makeLoanViolation(10000, 12000)];
+    expect(generateRestructuringSuggestions(deal, violations)).toEqual([]);
+  });
+
+  it('ordering is consistent: reduce_apr first, extend_term second, increase_down_payment third', () => {
+    const deal = makeDeal({ apr: 40, termMonths: 36, salePrice: 15000, downPayment: 2000, loanAmount: 13000 });
+    const violations = [makeAprViolation(36, 40)];
+
+    const suggestions = generateRestructuringSuggestions(deal, violations);
+    const strategies = suggestions.map(s => s.strategy);
+
+    const reduceIdx = strategies.indexOf('reduce_apr');
+    const extendIdx = strategies.indexOf('extend_term');
+    const downIdx = strategies.indexOf('increase_down_payment');
+
+    if (reduceIdx !== -1 && extendIdx !== -1) expect(reduceIdx).toBeLessThan(extendIdx);
+    if (reduceIdx !== -1 && downIdx !== -1) expect(reduceIdx).toBeLessThan(downIdx);
+    if (extendIdx !== -1 && downIdx !== -1) expect(extendIdx).toBeLessThan(downIdx);
   });
 });
