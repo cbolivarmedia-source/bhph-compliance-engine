@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@bhph/rules-engine": "^0.1.0",
     "@supabase/supabase-js": "^2.99.3",
     "next": "^15.1.7",
     "react": "^19.0.0",
