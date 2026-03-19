@@ -7,22 +7,20 @@ import { SuggestionCards } from '../components/SuggestionCard';
 import { ApplicableRules } from '../components/ApplicableRules';
 
 interface CheckResponse {
-  result: {
-    dealInput: {
-      stateCode: string;
-      salePrice: number;
-      downPayment: number;
-      loanAmount: number;
-      apr: number;
-      termMonths: number;
-      vehicleYear: number;
-    };
-    result: 'pass' | 'fail';
-    violations: any[];
-    warnings: any[];
-    applicableRules: any[];
-    checkedAt: string;
+  dealInput: {
+    stateCode: string;
+    salePrice: number;
+    downPayment: number;
+    loanAmount: number;
+    apr: number;
+    termMonths: number;
+    vehicleYear: number;
   };
+  result: 'pass' | 'fail';
+  violations: any[];
+  warnings: any[];
+  applicableRules: any[];
+  checkedAt: string;
   suggestions: any[];
 }
 
@@ -53,7 +51,7 @@ export default function Home() {
     }
   }
 
-  const deal = checkResult?.result;
+  const deal = checkResult;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -103,13 +101,13 @@ export default function Home() {
                   checkedAt={deal.checkedAt}
                 />
 
-                {(deal.violations.length > 0 || deal.warnings.length > 0) && (
-                  <ViolationsList violations={deal.violations} warnings={deal.warnings} />
+                {((deal.violations?.length ?? 0) > 0 || (deal.warnings?.length ?? 0) > 0) && (
+                  <ViolationsList violations={deal.violations ?? []} warnings={deal.warnings ?? []} />
                 )}
 
-                {checkResult!.suggestions.length > 0 && (
+                {(deal.suggestions?.length ?? 0) > 0 && (
                   <SuggestionCards
-                    suggestions={checkResult!.suggestions}
+                    suggestions={deal.suggestions}
                     originalDeal={{
                       apr: deal.dealInput.apr,
                       termMonths: deal.dealInput.termMonths,
